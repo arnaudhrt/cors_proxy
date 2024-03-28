@@ -1,16 +1,18 @@
 const express = require("express");
 const request = require("request");
-
 const app = express();
 const PORT = 3000;
 
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
+  // Définir CSP pour autoriser l'iframe de votre domaine
+  // Remplacez 'example.com' par votre domaine réel
+  res.header("Content-Security-Policy", "frame-ancestors 'self' http://localhost:5173/");
+
   next();
 });
 
 app.get("/proxy", (req, res) => {
-  // Récupérer l'URL du site web cible à partir des paramètres de requête
   const urlToProxy = req.query.url;
 
   if (!urlToProxy) {
@@ -18,20 +20,25 @@ app.get("/proxy", (req, res) => {
   }
 
   try {
-    // Options pour la requête (ajoutez des en-têtes supplémentaires si nécessaire)
     const options = {
       url: urlToProxy,
       headers: {
         "User-Agent": "Mozilla/5.0",
       },
+      // Ajoutez cette option pour ignorer l'en-tête X-Frame-Options de la réponse
+      gzip: true,
     };
 
-    request(options)
-      .on("error", (error) => {
+    // Suppression de l'en-tête X-Frame-Options de la réponse proxifiée
+    request(options, (error, response, body) => {
+      if (error) {
         console.error("Error during the proxy request:", error);
-        res.status(500).send("Proxy request failed.");
-      })
-      .pipe(res);
+        return res.status(500).send("Proxy request failed.");
+      }
+
+      res.removeHeader("X-Frame-Options"); // Supprimer cet en-tête pour éviter les conflits
+      res.send(body);
+    });
   } catch (error) {
     console.error("Proxy server error:", error);
     res.status(500).send("Error while processing the proxy request.");
